@@ -1,0 +1,5 @@
+*rds
+*.nextflow/
+*.nextflow.log*
+*__pycache__/
+*.pyc
