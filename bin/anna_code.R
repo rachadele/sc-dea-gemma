@@ -12,7 +12,7 @@ sc_experiment_list <- c('GSE267301',
                         'GSE280569')
 dea_res <- list()
 for (experiment in sc_experiment_list){
-  sc_DE <- get_differential_expression_values(experiment)
+  sc_DE <- get_differential_expression_values(experiment, readableContrasts = TRUE)
   dea_res[[experiment]] <- sc_DE
 }
 
@@ -21,3 +21,6 @@ for (experiment in sc_experiment_list){
   sc_meta <- get_dataset_differential_expression_analyses(experiment)
   dea_meta[[experiment]] <- sc_meta
 }
+
+
+

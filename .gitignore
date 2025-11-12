@@ -3,3 +3,6 @@
 *.nextflow.log*
 *__pycache__/
 *.pyc
+work/
+**results/
+.vscode/
