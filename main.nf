@@ -91,7 +91,7 @@ process GET_DEA_RESULTS {
 
 process GET_DEA_META {
 	tag "$experiment"
-	conda "/home/rschwartz/anaconda3/envs/r4.3"
+	conda "/home/rschwartz/anaconda3/envs/gemmapy"
 	publishDir "${params.outdir}/meta_files", mode: 'copy'
 
 	input:
@@ -102,12 +102,33 @@ process GET_DEA_META {
 
 	script:
 	"""
-	Rscript $projectDir/bin/get_dea_meta.R \\
-		--experiment ${experiment} \\
-		--username ${params.GEMMA_USERNAME} \\
+	python $projectDir/bin/get_dea_meta.py \
+		--experiment ${experiment} \
+		--username ${params.GEMMA_USERNAME} \
 		--password ${params.GEMMA_PASSWORD}
 	"""
 
+}
+
+process MAP_DEA_META {
+	tag "$experiment"
+	conda "/home/rschwartz/anaconda3/envs/scanpyenv"
+	publishDir "${params.outdir}/dea_meta_mapped/${experiment}", mode: 'copy'
+
+	input:
+	tuple val(experiment), val(result_id), path(dea_results), path(dea_meta)
+
+	output:
+	path "**tsv"
+
+	script:
+	"""
+	python3 $projectDir/bin/map_contrast_meta.py \\
+		--experiment ${experiment} \\
+		--dea_results ${dea_results} \\
+		--dea_meta ${dea_meta} \\
+		--result_id ${result_id}
+	"""
 }
 
 
@@ -133,38 +154,20 @@ workflow {
 	dea_meta_files = GET_DEA_META(RUN_DEA.out.dea_done)
 
 
-	// gt experiment from filenames
+	dea_results_files.flatMap { experiment, dea_results ->
+		dea_results
+		.collect { dea_result_file ->
+			def result_id = dea_result_file.getName().split("_")[1]
+			[experiment, result_id, dea_result_file]
+		}
+	}.set { dea_results_ch }
 
-	//dea_results_files.flatten()
-		//.map { file -> 
-			//def fullname = file.getName()
-			//def experiment = fullname.split("_")[0]
-			//def resultSet = fullname.split("_")[1]
-			//[experiment, resultSet, file]
-		//}
-	//.set { dea_results_ch}
+	dea_results_ch.combine(dea_meta_files, by: 0)
+	.set { dea_meta_combined_ch }
 
-	//dea_meta_files.flatten()
-		//.map { file -> 
-			//def fullname = file.getName()
-			//def experiment = fullname.split("_")[0]
-			//[experiment, file]
-		//}
 	
-	//.set { dea_meta_ch }
 
-
-	//// group tuples by experiment
-	//dea_results_ch
-		//.groupTuple(by: [0,1])
-		//.set { grouped_contrast_ch }
-
-	//grouped_contrast_ch.combine(dea_meta_ch, by: 0)
-		//.set { final_grouped_ch }
-
-	//final_grouped_ch.view()
-
-
+	MAP_DEA_META(dea_meta_combined_ch)
 
 
 }
