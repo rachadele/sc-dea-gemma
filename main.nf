@@ -15,11 +15,12 @@ process LOAD_PREFERRED_CTA {
 	def cta_file = "${params.cta_file_prefix}/${experiment_name}/${experiment}_${params.level}_cell_type.tsv"
 
 	"""
-	gemma-cli loadSingleCellData -loadCta -e ${experiment} \
-			   -ctaFile ${cta_file} -preferredCta \
-			   -ctaName "sc-pipeline-${params.version}-${params.level}" \
-			   -ctaProtocol "sc-pipeline-${params.version}" \
-			   --data-type NULL \
+	gemma-cli loadSingleCellData -loadCta -e ${experiment} \\
+				-replaceCta \\
+			   -ctaFile ${cta_file} -preferredCta \\
+			   -ctaName "sc-pipeline-${params.version}-${params.level}" \\
+			   -ctaProtocol "sc-pipeline-${params.version}" \\
+			   --data-type NULL \\
 			   -ignoreSamplesLackingData 2> "message.txt"
 	"""
 }
