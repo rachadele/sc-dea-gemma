@@ -28,7 +28,7 @@ def main():
     for result_id, df in results.items():
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df)
-        filename = f"dea_results_{args.experiment}_{result_id}.tsv"
+        filename = f"{args.experiment}_{result_id}.tsv"
         df.to_csv(filename, sep='\t', index=False)
         print(f"Saved: {filename}")
 

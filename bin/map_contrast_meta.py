@@ -7,46 +7,62 @@ import argparse
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Map contrast metadata to DEA results")
-    parser.add_argument("--dea_results", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/90/2578ee14a2ba7da16a8e94f02ea5fb/GSE157827_636863_dea_results.tsv")
-    parser.add_argument("--dea_meta", type=str, help="Path to DEA metadata file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/90/2578ee14a2ba7da16a8e94f02ea5fb/GSE157827_meta.tsv")
-    parser.add_argument("--experiment", type=str, help="Experiment accession ID", default="GSE157827")
-    parser.add_argument("--result_id", type=str, help="Result ID to filter metadata", default="636863")
+    parser.add_argument("--dea_results", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/bf/f12e751e72af5cc120a2508013480c/GSE280569_636866.tsv")
+    parser.add_argument("--dea_meta", type=str, help="Path to DEA metadata file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/bf/f12e751e72af5cc120a2508013480c/GSE280569_meta.tsv")
+    parser.add_argument("--experiment", type=str, help="Experiment accession ID", default="GSE280569")
+    parser.add_argument("--result_id", type=str, help="Result ID to filter metadata", default="636866")
     if __name__ == "__main__":
         known_args, _ = parser.parse_known_args()
         return known_args
+
+
+
 
 def split_de_contrasts(dea_results_df):      
   # extract unique contrast IDs from contrast_{id}_* columns and return a single data frame for each contrast
   contrast_cols = [col for col in dea_results_df.columns if col.startswith("contrast_")]
   contrast_ids = set()
+  no_id_cols = []
   for col in contrast_cols:
-    contrast_id = str(col.split("_")[1])  # ensure string type
-    contrast_ids.add(contrast_id)
+    parts = col.split("_")
+    if len(parts) > 2:
+      contrast_id = str(parts[1])  # e.g. contrast_636875_log2fc
+      contrast_ids.add(contrast_id)
+    else:
+      # e.g. contrast_log2fc (no id)
+      no_id_cols.append(col)
   contrast_dfs = {}
+  # Handle contrast IDs with explicit id
   for contrast_id in contrast_ids:
-    # contrast columns follow the pattern contrast_[id]_*
     contrast_specific_cols = [col for col in contrast_cols if col.startswith(f"contrast_{contrast_id}_")]
-    # select Probe, NCBIid, gene_ensembl_id, GeneSymbol, GeneName, pvalue, correctedpvalue, rank,contrast specific columns
     selected_cols = ["Probe", "NCBIid", "gene_ensembl_id", "GeneSymbol", "GeneName", "pvalue", "corrected_pvalue", "rank"] + contrast_specific_cols
     contrast_df = dea_results_df[selected_cols].copy()
-    contrast_dfs[str(contrast_id)] = contrast_df  # ensure string key
+    contrast_dfs[str(contrast_id)] = contrast_df
+  # Handle columns with no id (map to 'None')
+  if no_id_cols:
+    selected_cols = ["Probe", "NCBIid", "gene_ensembl_id", "GeneSymbol", "GeneName", "pvalue", "corrected_pvalue", "rank"] + no_id_cols
+    contrast_df = dea_results_df[selected_cols].copy()
+    contrast_dfs['None'] = contrast_df
   return contrast_dfs
 
 def split_meta(dea_meta_df, result_id):
   # Filter metadata for the specified contrast and result_id
+  # change NaNs to None
+  dea_meta_df = dea_meta_df.replace({np.nan: None})
   # make a string type
-  dea_meta_df["result.ID"] = dea_meta_df["result.ID"].astype(str)
-  dea_meta_filtered = dea_meta_df[dea_meta_df["result.ID"] == result_id]
+  
+  dea_meta_df["result_ID"] = dea_meta_df["result_ID"].astype(str)
+  dea_meta_filtered = dea_meta_df[dea_meta_df["result_ID"] == result_id]
   # create dict of contrast.id: contrast metadata
   contrast_meta_dict = {}
   for _, row in dea_meta_filtered.iterrows():
-    contrast_id = str(row["contrast.id"])  # ensure string key
+    contrast_id = str(row["contrast_ID"])  # ensure string key
     contrast_meta_dict[contrast_id] = row.to_dict()
   # pop result.ID contrast.id and experiment.ID from each contrast metadata
   for contrast_id in contrast_meta_dict:
-    contrast_meta_dict[contrast_id].pop("result.ID", None)
-    contrast_meta_dict[contrast_id].pop("experiment.ID", None)
-    contrast_meta_dict[contrast_id].pop("contrast.id", None)
+    contrast_meta_dict[contrast_id].pop("result_ID", None)
+    contrast_meta_dict[contrast_id].pop("experiment_ID", None)
+    contrast_meta_dict[contrast_id].pop("contrast_ID", None)
   return contrast_meta_dict
   
 
@@ -66,14 +82,6 @@ def main():
   result_id = str(args.result_id)
   
   de_results_dict = split_de_contrasts(dea_results_df)
-  # if result not in contrast metadata result.ID, exit
-  if result_id not in dea_meta_df["result.ID"].astype(str).values:
-      Warning(f"Result ID {result_id} not found in DEA metadata. Exiting without mapping.")
-      # write fake tsv to trick nextflow
-      outpath = f"{args.experiment}_{args.result_id}_no_meta.tsv"
-      pd.DataFrame().to_csv(outpath, sep="\t", index=False)
-      sys.exit(0)
-      
   contrast_meta_dict = split_meta(dea_meta_df, result_id)
  
   # map contrast metadata to each de_results_dict df based on dict keys
@@ -83,6 +91,7 @@ def main():
         contrast_meta = contrast_meta_dict[contrast_id]
         for key, value in contrast_meta.items():
           de_results_contrast_df[key] = value
+        breakpoint
         # Save the updated DEA results with contrast metadata in current directory
         outpath = f"{args.experiment}_{result_id}_{contrast_id}_mapped.tsv"
         de_results_contrast_df.to_csv(outpath, sep="\t", index=False)

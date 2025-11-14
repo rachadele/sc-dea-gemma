@@ -1,12 +1,13 @@
 import gemmapy
 import argparse
 import pandas as pd
+import sys
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description='Download DEA results from Gemma and save as TSV files.')
   parser.add_argument('--username', type=str, help='Gemma username', default="raschwar")
   parser.add_argument('--password', type=str, help='Gemma password', default="7nddtt")
-  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE280569")
+  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE213364")
   if __name__ == "__main__":
     known_args, _ = parser.parse_known_args()
     return known_args
@@ -16,7 +17,8 @@ def extract_factors(df, factors_column="experimental_factors"):
   # extrac t the "value" column from each data frame in the factors column
   # use lambda function to check if item is a data frame
   
-  levels = df[factors_column].apply(lambda x: x["value"]if isinstance(x, pd.DataFrame) else [])
+  levels = df[factors_column].apply(lambda x: x["summary"][0] if isinstance(x, pd.DataFrame) else [])
+
   df["level"] = levels
   return df
 
@@ -32,8 +34,17 @@ def main():
 
   # Fetch DEA meta using gemmapy
   analyses = api.get_dataset_differential_expression_analyses(experiment)
-  # Convert to DataFrame if possible
   df = pd.DataFrame(analyses)
+
+  # if analyses is empty, raise error
+  if df.isna().all().all():    
+    # write empty tsv file
+    outpath = f"{experiment}_no_meta.tsv"
+    pd.DataFrame().to_csv(outpath, sep="\t", index=False)
+    Warning(f"Empty DEA meta for {experiment} written to {outpath}")
+    sys.exit(0)
+    
+  # Convert to DataFrame if possible
   df = extract_factors(df)
 
   # drop data frame columns

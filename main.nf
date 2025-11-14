@@ -52,7 +52,7 @@ process RUN_DEA {
 	val experiment
 
 	output:
-	"message.txt"
+	path "message.txt"
 	val experiment, emit: dea_done
 
 	script:
@@ -70,7 +70,7 @@ process RUN_DEA {
 
 process GET_DEA_RESULTS {
 	tag "$experiment"
-	conda "/home/rschwartz/anaconda3/envs/r4.3"
+	conda "/home/rschwartz/anaconda3/envs/gemmapy"
 	publishDir "${params.outdir}/dea_results_files/${experiment}", mode: 'copy'
 
 	input:
@@ -81,7 +81,7 @@ process GET_DEA_RESULTS {
 
 	script:
 	"""
-	Rscript $projectDir/bin/get_dea_results.R \\
+	python3 $projectDir/bin/get_dea_results.py \\
 		--experiment ${experiment} \\
 		--username ${params.GEMMA_USERNAME} \\
 		--password ${params.GEMMA_PASSWORD}
@@ -102,9 +102,9 @@ process GET_DEA_META {
 
 	script:
 	"""
-	python $projectDir/bin/get_dea_meta.py \
-		--experiment ${experiment} \
-		--username ${params.GEMMA_USERNAME} \
+	python $projectDir/bin/get_dea_meta.py \\
+		--experiment ${experiment} \\
+		--username ${params.GEMMA_USERNAME} \\
 		--password ${params.GEMMA_PASSWORD}
 	"""
 
@@ -137,27 +137,27 @@ workflow {
 	experiments = Channel.fromList(params.experiments)
 
 	// run preferred cta loading
-	LOAD_PREFERRED_CTA(experiments)
+	//LOAD_PREFERRED_CTA(experiments)
 	
 	
 
 	// aggregate data
-	AGGREGATE_DATA(	LOAD_PREFERRED_CTA.out.cta_done)
+	//AGGREGATE_DATA(experiments)
 
 
 	// run dea
-	RUN_DEA(AGGREGATE_DATA.out.agg_done)
+	//RUN_DEA(AGGREGATE_DATA.out.agg_done)
 	
 
 	//only run these after DEA is done
-	dea_results_files = GET_DEA_RESULTS(RUN_DEA.out.dea_done)
-	dea_meta_files = GET_DEA_META(RUN_DEA.out.dea_done)
+	dea_results_files = GET_DEA_RESULTS(experiments)
+	dea_meta_files = GET_DEA_META(experiments)
 
 
 	dea_results_files.flatMap { experiment, dea_results ->
 		dea_results
 		.collect { dea_result_file ->
-			def result_id = dea_result_file.getName().split("_")[1]
+			def result_id = dea_result_file.getName().split("_")[1].split("\\.")[0]
 			[experiment, result_id, dea_result_file]
 		}
 	}.set { dea_results_ch }
