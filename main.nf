@@ -1,5 +1,3 @@
-
-
 process LOAD_PREFERRED_CTA {
     tag "$experiment"
 
@@ -119,7 +117,7 @@ process MAP_DEA_META {
 	tuple val(experiment), val(result_id), path(dea_results), path(dea_meta)
 
 	output:
-	path "**tsv"
+	tuple val(experiment), val(result_id), path("**tsv"), emit: mapped_contrasts
 
 	script:
 	"""
@@ -132,26 +130,45 @@ process MAP_DEA_META {
 }
 
 
+process PLOT_PVAL_DISTS {
+    tag "$experiment"
+    conda "/home/rschwartz/anaconda3/envs/scanpyenv"
+    publishDir "${params.outdir}/pvalue_dists/${experiment}/${result_id}/", mode: 'copy'
+
+    input:
+    tuple val(experiment), val(result_id), path(dea_results_mapped)
+
+    output:
+    path "**.png"
+
+    script:
+    """
+    python $projectDir/bin/plot_pval_dists.py \
+        --dea_results_mapped ${dea_results_mapped}
+    """
+}
+
+
 workflow {
 
 	experiments = Channel.fromList(params.experiments)
 
 	// run preferred cta loading
-	//LOAD_PREFERRED_CTA(experiments)
+	LOAD_PREFERRED_CTA(experiments)
 	
 	
 
 	// aggregate data
-	//AGGREGATE_DATA(experiments)
+	AGGREGATE_DATA(LOAD_PREFERRED_CTA.out.cta_done)
 
 
 	// run dea
-	//RUN_DEA(AGGREGATE_DATA.out.agg_done)
+	RUN_DEA(AGGREGATE_DATA.out.agg_done)
 	
 
 	//only run these after DEA is done
-	dea_results_files = GET_DEA_RESULTS(experiments)
-	dea_meta_files = GET_DEA_META(experiments)
+	dea_results_files = GET_DEA_RESULTS(RUN_DEA.out.dea_done)
+	dea_meta_files = GET_DEA_META(RUN_DEA.out.dea_done)
 
 
 	dea_results_files.flatMap { experiment, dea_results ->
@@ -168,6 +185,29 @@ workflow {
 	
 
 	MAP_DEA_META(dea_meta_combined_ch)
+	// view mapped contrasts
+	//MAP_DEA_META.out.mapped_contrasts.view()
+
+	MAP_DEA_META.out.mapped_contrasts.flatMap { experiment, result_id, mapped_tsv_list ->
+		// mapped_tsv_list may not be a list if there's only one contrast
+		// check if no_res in filename
+		if ( mapped_tsv_list instanceof Path ) {
+			mapped_tsv_list = [ mapped_tsv_list ]
+		}
+		else {
+			mapped_tsv_list = mapped_tsv_list
+		}
+		// Only keep mapped_tsvs that do NOT have 'no_res' in the filename
+		mapped_tsv_list.findAll { mapped_tsv ->
+			!mapped_tsv.getName().contains('no_res')
+		}.collect { mapped_tsv ->
+			[experiment, result_id, mapped_tsv]
+		}
+	}.set { mapped_tsvs }
+	//view
+	//mapped_tsvs.view()
+		
 
 
+   	PLOT_PVAL_DISTS(mapped_tsvs)
 }
