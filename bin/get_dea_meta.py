@@ -7,19 +7,23 @@ def parse_arguments():
   parser = argparse.ArgumentParser(description='Download DEA results from Gemma and save as TSV files.')
   parser.add_argument('--username', type=str, help='Gemma username', default="raschwar")
   parser.add_argument('--password', type=str, help='Gemma password', default="7nddtt")
-  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE213364")
+  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE280569")
   if __name__ == "__main__":
     known_args, _ = parser.parse_known_args()
     return known_args
 
-def extract_factors(df, factors_column="experimental_factors"):
+def extract_factors(df):
   # factors column stores data frames where the "value" column has the factor level
   # extrac t the "value" column from each data frame in the factors column
   # use lambda function to check if item is a data frame
   
-  levels = df[factors_column].apply(lambda x: x["summary"][0] if isinstance(x, pd.DataFrame) else [])
+  levels = df["experimental_factors"].apply(lambda x: x["summary"][0] if isinstance(x, pd.DataFrame) else [])
+  subset_factor = df["subset_factor"].apply(lambda x: x["summary"][0] if isinstance(x, pd.DataFrame) else [])
 
-  df["level"] = levels
+  #baseline_factors = df["baseline_factors"].apply(lambda x: x["summary"][0] if isinstance(x, pd.DataFrame) else [])
+  df["experimental_factor"] = levels
+  df["cell_type"] = subset_factor
+  
   return df
 
 def main():
