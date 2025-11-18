@@ -9,6 +9,7 @@ def parse_arguments():
     parser.add_argument('--username', type=str, help='Gemma username', default="raschwar")
     parser.add_argument('--password', type=str, help='Gemma password', default="7nddtt")
     parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE213364")
+    parser.add_argument('--use_staging', action='store_true', help='Use Gemma staging server')
     known_args, _ = parser.parse_known_args()
     return known_args
     
@@ -16,10 +17,12 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     # Authenticate if credentials are provided
-    if args.username and args.password:
-        api = gemmapy.GemmaPy(auth=(args.username, args.password))
+    if args.use_staging:
+        api = gemmapy.GemmaPy(auth=(args.username, args.password), path="staging")
     else:
-        raise ValueError("Username and password must be provided for authentication.")
+        api = gemmapy.GemmaPy(auth=(args.username, args.password))
+
+
 
     # Fetch DEA results using gemmapy
     results = api.get_differential_expression_values(args.experiment, readableContrasts=True)

@@ -120,7 +120,8 @@ process GET_DEA_RESULTS {
 	python3 $projectDir/bin/get_dea_results.py \\
 		--experiment ${experiment} \\
 		--username ${params.GEMMA_USERNAME} \\
-		--password ${params.GEMMA_PASSWORD}
+		--password ${params.GEMMA_PASSWORD} \\
+		${ params.use_staging ? '--use_staging' : '' }
 	"""
 
 }
