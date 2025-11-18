@@ -27,21 +27,35 @@ def main():
 
   args = parse_arguments()
 
-  # Extract GSE, result_id, and contrast_id from the filename
-  # Expecting filename like GSE_resultID_contrastID(_mapped).tsv
+  # Improved extraction: GSE, cell type (may have underscores), result_id (numeric, last part before _mapped)
   base = os.path.basename(args.dea_results_mapped)
-  # Remove _mapped and extension
-  base = re.sub(r'_mapped\\.tsv$', '', base)
-  base = re.sub(r'\\.tsv$', '', base)
-  # Split by _
-  parts = base.split('_mapped')[0].split('_')
+  base = re.sub(r'_mapped\.tsv$', '', base)
+  parts = base.split('_')
   experiment = parts[0]
-  cell_type = parts[1]
-  result_id = "_".join(parts[2:])
+  # Find the last numeric part as result_id
+  result_id_idx = None
+  for i in range(len(parts)-1, 0, -1):
+    if re.match(r'^\d+$', parts[i]):
+      result_id_idx = i
+      break
+  if result_id_idx is not None and result_id_idx > 1:
+    cell_type = '_'.join(parts[1:result_id_idx])
+    result_id = parts[result_id_idx]
+  else:
+    cell_type = 'unknown'
+    result_id = parts[-1] if len(parts) > 1 else 'unknown'
 
   # Load DEA results
   dea_results_mapped = pd.read_csv(args.dea_results_mapped, sep="\t")
-
+  # check if file is empty
+  if dea_results_mapped.empty:
+      print(f"DEA results file {args.dea_results_mapped} is empty. Exiting.")
+      # write empty plot file
+      outpath = f"{experiment}_{cell_type}_hist.png"
+      plt.figure()
+      plt.savefig(outpath)
+      print(f"Saved empty plot to {outpath}")
+      sys.exit(0)
   # Identify all contrast pvalue columns
   pval_cols = [col for col in dea_results_mapped.columns if re.match(r"contrast(_[\w\d]+)?_pvalue$", col)]
 
@@ -90,7 +104,7 @@ def main():
   wrapped_title = '\n'.join(textwrap.wrap(title_str, width=80))
   fig.suptitle(wrapped_title, fontsize=12)
   plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-  fname = f"pval_dist_{experiment}_{result_id}_facet.png"
+  fname = f"{experiment}_{cell_type}_hist.png"
   plt.savefig(fname)
   plt.close()
   print(f"Saved {fname}")
