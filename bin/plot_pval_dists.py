@@ -7,13 +7,14 @@ import argparse
 import matplotlib.pyplot as plt
 import re
 import textwrap
+import math
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Map contrast metadata to DEA results")
-    parser.add_argument("--dea_results_mapped", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/class_results/dea_meta_mapped/GSE280569/GSE280569_636886_no_ID_mapped.tsv")
-    if __name__ == "__main__":
-        known_args, _ = parser.parse_known_args()
-        return known_args
+      parser = argparse.ArgumentParser(description="Map contrast metadata to DEA results")
+      parser.add_argument("--dea_results_mapped", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/8c/2fc36b9f7cb8e6eb5e3fb3cbc02284/GSE280569_oligodendrocyte_precursor_cell_637201_mapped.tsv")
+      if __name__ == "__main__":
+          known_args, _ = parser.parse_known_args()
+          return known_args
 
 
 def check_unique(vals, name):
@@ -35,9 +36,8 @@ def main():
   # Split by _
   parts = base.split('_mapped')[0].split('_')
   experiment = parts[0]
-  result_id = parts[1]
-  contrast_id = "_".join(parts[2:])
-  
+  cell_type = parts[1]
+  result_id = "_".join(parts[2:])
 
   # Load DEA results
   dea_results_mapped = pd.read_csv(args.dea_results_mapped, sep="\t")
@@ -45,35 +45,55 @@ def main():
   # Identify all contrast pvalue columns
   pval_cols = [col for col in dea_results_mapped.columns if re.match(r"contrast(_[\w\d]+)?_pvalue$", col)]
 
-  title_dict = {}
+  contrast_ids = []
 
-  for column in ["factor_category", "experimental_factor", "cell_type"]:
-      unique_value = check_unique(dea_results_mapped[column].unique(), column)
-      title_dict[column] = unique_value
-  
-# make title
-  title_parts = [f"{experiment}"] + [f"{value}" for key, value in title_dict.items() if value != "unknown"]
-  title_str = " | ".join(title_parts)
-
-  # For every contrast, plot p-value distribution as a single histogram (no grouping)
   for pval_col in pval_cols:
       m = re.match(r"contrast_([\w\d]+)_pvalue$", pval_col)
-      this_contrast_id = m.group(1) if m else 'no_ID'
-
-      plt.figure(figsize=(10,4))
-      pvals = dea_results_mapped[pval_col].dropna()
-      plt.hist(pvals, bins=50, range=(0,1), color='blue', alpha=0.7)
-      # Main title: smaller font, concise, wrap if too long
-      #title = f"{experiment} | {result_id} | {this_contrast_id}"
-      wrapped_title = '\n'.join(textwrap.wrap(title_str, width=80))
-      plt.title(wrapped_title, fontsize=10)
-      plt.xlabel('p-value')
-      plt.ylabel('Frequency')
-      fname = f"pval_dist_{experiment}_{result_id}_{this_contrast_id}.png"
-      plt.tight_layout()
-      plt.savefig(fname)
-      plt.close()
-      print(f"Saved {fname}")
+      if m:
+          contrast_ids.append(m.group(1))
+  
+  if not contrast_ids:
+    contrast_ids = ['no_ID']
+    
+          
+  # Build all combinations
+  n = len(contrast_ids)
+  ncols = min(3, n)
+  nrows = math.ceil(n / ncols)
+  fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 4*nrows), squeeze=False)
+  for idx, contrast_id in enumerate(contrast_ids):
+      # extract experimental factors
+      factor_value_col = f"contrast_{contrast_id}_experimental_factor"
+      exp_factor = dea_results_mapped[factor_value_col].dropna().unique()
+      factor_category_col = f"contrast_{contrast_id}_factor_category"
+      factor_category = dea_results_mapped[factor_category_col].dropna().unique()
+      
+      row, col = divmod(idx, ncols)
+      ax = axes[row][col]
+      # Find the pval column for this contrast
+      pval_col = f"contrast_{contrast_id}_pvalue"
+      # Subset data for this cell type
+      if pval_col in dea_results_mapped.columns:
+        pvals = dea_results_mapped[pval_col].dropna()
+      else:
+        pvals = dea_results_mapped["contrast_pvalue"].dropna()
+      ax.hist(pvals, bins=50, range=(0,1), color='blue', alpha=0.7)
+      ax.set_title(f"{contrast_id} | {exp_factor} | {factor_category}", fontsize=9)
+      ax.set_xlabel('p-value')
+      ax.set_ylabel('Frequency')
+  # Hide any unused subplots
+  for idx in range(len(contrast_ids), nrows*ncols):
+      row, col = divmod(idx, ncols)
+      fig.delaxes(axes[row][col])
+  # Main title
+  title_str = f"{experiment} | {cell_type}"
+  wrapped_title = '\n'.join(textwrap.wrap(title_str, width=80))
+  fig.suptitle(wrapped_title, fontsize=12)
+  plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+  fname = f"pval_dist_{experiment}_{result_id}_facet.png"
+  plt.savefig(fname)
+  plt.close()
+  print(f"Saved {fname}")
           
 if __name__ == "__main__":
     main()

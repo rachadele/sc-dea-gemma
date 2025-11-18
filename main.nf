@@ -13,7 +13,7 @@ process LOAD_PREFERRED_CTA {
 	def cta_file = "${params.cta_file_prefix}/${experiment_name}/${experiment}_${params.level}_cell_type.tsv"
 
 	"""
-	gemma-cli loadSingleCellData -loadCta -e ${experiment} \\
+	gemma-cli-staging loadSingleCellData -loadCta -e ${experiment} \\
 				-replaceCta \\
 			   -ctaFile ${cta_file} -preferredCta \\
 			   -ctaName "sc-pipeline-${params.version}-${params.level}" \\
@@ -23,7 +23,23 @@ process LOAD_PREFERRED_CTA {
 	"""
 }
 
+process UPDATE_CTA {
+	tag "$experiment"
 
+	 input:
+		val experiment
+
+	output :
+		val experiment, emit: cta_done
+		path "message.txt"
+
+	script:
+	"""
+	gemma-cli-staging updateSingleCellData -e ${experiment} \\
+				-preferredCta "sc-pipeline-${params.version}-${params.level}" \\
+				2> "message.txt"
+	"""
+}
 
 process AGGREGATE_DATA {
 	tag "$experiment"
@@ -154,21 +170,17 @@ workflow {
 	experiments = Channel.fromList(params.experiments)
 
 	// run preferred cta loading
-	LOAD_PREFERRED_CTA(experiments)
-	
-	
+	//UPDATE_CTA(experiments)
 
-	// aggregate data
-	AGGREGATE_DATA(LOAD_PREFERRED_CTA.out.cta_done)
+	//// aggregate data
+	//AGGREGATE_DATA(UPDATE_CTA.out.cta_done)
 
-
-	// run dea
-	RUN_DEA(AGGREGATE_DATA.out.agg_done)
-	
+	//// run dea
+	//RUN_DEA(AGGREGATE_DATA.out.agg_done)
 
 	//only run these after DEA is done
-	dea_results_files = GET_DEA_RESULTS(RUN_DEA.out.dea_done)
-	dea_meta_files = GET_DEA_META(RUN_DEA.out.dea_done)
+	dea_results_files = GET_DEA_RESULTS(experiments)
+	dea_meta_files = GET_DEA_META(experiments)
 
 
 	dea_results_files.flatMap { experiment, dea_results ->
@@ -186,28 +198,9 @@ workflow {
 
 	MAP_DEA_META(dea_meta_combined_ch)
 	// view mapped contrasts
-	//MAP_DEA_META.out.mapped_contrasts.view()
+	MAP_DEA_META.out.mapped_contrasts.filter { !it[2].getName().contains("no_res") }
+	.set { mapped_tsvs }
+	// remove files containting "no_res"
 
-	MAP_DEA_META.out.mapped_contrasts.flatMap { experiment, result_id, mapped_tsv_list ->
-		// mapped_tsv_list may not be a list if there's only one contrast
-		// check if no_res in filename
-		if ( mapped_tsv_list instanceof Path ) {
-			mapped_tsv_list = [ mapped_tsv_list ]
-		}
-		else {
-			mapped_tsv_list = mapped_tsv_list
-		}
-		// Only keep mapped_tsvs that do NOT have 'no_res' in the filename
-		mapped_tsv_list.findAll { mapped_tsv ->
-			!mapped_tsv.getName().contains('no_res')
-		}.collect { mapped_tsv ->
-			[experiment, result_id, mapped_tsv]
-		}
-	}.set { mapped_tsvs }
-	//view
-	//mapped_tsvs.view()
-		
-
-
-   	PLOT_PVAL_DISTS(mapped_tsvs)
+	PLOT_PVAL_DISTS(mapped_tsvs)
 }

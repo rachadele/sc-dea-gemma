@@ -4,19 +4,16 @@ import numpy as np
 import sys
 import os
 import argparse
-
+import re
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Map contrast metadata to DEA results")
-    parser.add_argument("--dea_results", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/class_results/dea_results_files/GSE213364/GSE213364_636937.tsv")
+    parser.add_argument("--dea_results", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/class_results/dea_results_files/GSE213364/GSE213364_637157.tsv")
     parser.add_argument("--dea_meta", type=str, help="Path to DEA metadata file", default="/space/grp/rschwartz/rschwartz/dea-granularity/class_results/meta_files/GSE213364_meta.tsv")
-    parser.add_argument("--experiment", type=str, help="Experiment accession ID", default="GSE280569")
-    parser.add_argument("--result_id", type=str, help="Result ID to filter metadata", default="636927")
+    parser.add_argument("--experiment", type=str, help="Experiment accession ID", default="GSE213364")
+    parser.add_argument("--result_id", type=str, help="Result ID to filter metadata", default="637157")
     if __name__ == "__main__":
         known_args, _ = parser.parse_known_args()
         return known_args
-
-
-
 
 def split_de_contrasts(dea_results_df):      
   # extract unique contrast IDs from contrast_{id}_* columns and return a single data frame for each contrast
@@ -66,7 +63,11 @@ def split_meta(dea_meta_df, result_id):
     contrast_meta_dict[contrast_id].pop("experiment_ID", None)
     contrast_meta_dict[contrast_id].pop("contrast_ID", None)
   return contrast_meta_dict
-  
+
+def clean_celltype(ct):
+  if pd.isna(ct):
+    return "unknown"
+  return str(ct).replace(' ', '_').replace('/', '_')
 
 def main():
   args = parse_arguments()
@@ -85,19 +86,42 @@ def main():
   
   de_results_dict = split_de_contrasts(dea_results_df)
   contrast_meta_dict = split_meta(dea_meta_df, result_id)
- 
+  de_results_combined = pd.DataFrame()
   # map contrast metadata to each de_results_dict df based on dict keys
+
   for contrast_id, de_results_contrast_df in de_results_dict.items():
-      if contrast_id in contrast_meta_dict.keys():
-        print(f"Mapping metadata for contrast ID: {contrast_id}")
-        contrast_meta = contrast_meta_dict[contrast_id]
-        de_results_contrast_df["factor_category"] = contrast_meta.get("factor_category", None)
-        de_results_contrast_df["experimental_factor"] = contrast_meta.get("experimental_factor", None)
-        de_results_contrast_df["cell_type"] = contrast_meta.get("cell_type", None)
-       #breakpoint
-        # Save the updated DEA results with contrast metadata in current directory
-        outpath = f"{args.experiment}_{result_id}_{contrast_id}_mapped.tsv"
-        de_results_contrast_df.to_csv(outpath, sep="\t", index=False)
- 
+    if contrast_id in contrast_meta_dict.keys():
+      print(f"Mapping metadata for contrast ID: {contrast_id}")
+      contrast_meta = contrast_meta_dict[contrast_id]
+      de_results_contrast_df[f"contrast_{contrast_id}_factor_category"] = contrast_meta.get("factor_category", None)
+      de_results_contrast_df[f"contrast_{contrast_id}_experimental_factor"] = contrast_meta.get("experimental_factor", None)
+      # Clean cell type name for both column and output
+      cell_type_val = contrast_meta.get("cell_type", None)
+      cell_type_clean = clean_celltype(cell_type_val)
+      de_results_contrast_df[f"contrast_{contrast_id}_cell_type"] = cell_type_clean
+      
+      if de_results_combined.empty:
+          de_results_combined = de_results_contrast_df
+      else:
+          # merge on gene identifiers
+          de_results_combined = pd.merge(de_results_combined, de_results_contrast_df, on=["Probe", "NCBIid", "gene_ensembl_id", "GeneSymbol", "GeneName", "pvalue", "corrected_pvalue", "rank"], how="outer")
+
+
+
+
+  # check that cell type is the same across all contrasts
+  cell_types = set()
+  
+  for col in [c for c in de_results_combined.columns if c.endswith("_cell_type")]:
+    cts = de_results_combined[col].unique()
+    cell_types = set(list(cell_types) + list(cts))
+    
+  if len(cell_types) > 1:
+      raise ValueError(f"Warning: Multiple unique cell types found across contrasts: {cell_types}")
+  cell_type = list(cell_types)[0] if cell_types else "unknown"
+  de_results_combined.to_csv(f"{args.experiment}_{cell_type}_{result_id}_mapped.tsv", sep="\t", index=False)
+  
+  
+  
 if __name__ == "__main__":
   main()
