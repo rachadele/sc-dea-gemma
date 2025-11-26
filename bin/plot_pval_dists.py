@@ -11,7 +11,7 @@ import math
 
 def parse_arguments():
       parser = argparse.ArgumentParser(description="Map contrast metadata to DEA results")
-      parser.add_argument("--dea_results_mapped", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/8c/2fc36b9f7cb8e6eb5e3fb3cbc02284/GSE280569_oligodendrocyte_precursor_cell_637201_mapped.tsv")
+      parser.add_argument("--dea_results_mapped", type=str, help="Path to DEA results file", default="/space/grp/rschwartz/rschwartz/dea-granularity/work/72/0955882723a0e9e418d2aa545abf87/GSE283187_unknown_637520_mapped.tsv")
       if __name__ == "__main__":
           known_args, _ = parser.parse_known_args()
           return known_args
@@ -46,11 +46,12 @@ def main():
     result_id = parts[-1] if len(parts) > 1 else 'unknown'
 
   # Load DEA results
-  dea_results_mapped = pd.read_csv(args.dea_results_mapped, sep="\t")
-  # check if file is empty
-  if dea_results_mapped.empty:
-      print(f"DEA results file {args.dea_results_mapped} is empty. Exiting.")
-      # write empty plot file
+  # try except
+  try:
+      dea_results_mapped = pd.read_csv(args.dea_results_mapped, sep="\t")
+  except Exception as e:
+      print(f"Error loading DEA results file {args.dea_results_mapped}: {e}")
+         # write empty plot file
       outpath = f"{experiment}_{cell_type}_hist.png"
       plt.figure()
       plt.savefig(outpath)

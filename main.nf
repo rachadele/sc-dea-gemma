@@ -92,12 +92,13 @@ process RUN_DEA {
 
 	script:
 	factors = params.experiment_factors[experiment].join(",")
-	def gemma_cmd = params.use_staging ? "gemma-cli-staging" : "gemma-cli"
+	def gemma_cmd = params.use_staging ? "gemma-cli-minimum-cells " : "gemma-cli"
 	"""
 	${gemma_cmd} diffExAnalyze -subset cell_type -e ${experiment} \\
 							--ignore-failing-subsets \\
 							--factors ${factors} \\
 							--no-files \\
+							--filter-minimum-number-of-cells ${params.min_cells} \\
 							 2> "message.txt"
 	"""
 

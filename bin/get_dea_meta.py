@@ -7,7 +7,7 @@ def parse_arguments():
   parser = argparse.ArgumentParser(description='Download DEA results from Gemma and save as TSV files.')
   parser.add_argument('--username', type=str, help='Gemma username', default="raschwar")
   parser.add_argument('--password', type=str, help='Gemma password', default="7nddtt")
-  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE280569")
+  parser.add_argument('--experiment', type=str, help='Gemma experiment accession', default="GSE213364")
   if __name__ == "__main__":
     known_args, _ = parser.parse_known_args()
     return known_args
