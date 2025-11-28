@@ -99,6 +99,7 @@ process RUN_DEA {
 							--factors ${factors} \\
 							--no-files \\
 							--filter-minimum-number-of-cells ${params.min_cells} \\
+							--filter-minimum-variance ${params.variance_filter} \\
 							 2> "message.txt"
 	"""
 
@@ -231,4 +232,8 @@ workflow {
 	// remove files containting "no_res"
 
 	PLOT_PVAL_DISTS(mapped_tsvs)
+}
+
+workflow.onComplete {
+	println "results written to: ${params.outdir}"
 }
